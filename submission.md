@@ -1,9 +1,42 @@
 # Project 5 — Mixtape Bug Hunt — Submission
 
 ## AI Usage
-*(Written last — see Milestone 4. This section will describe specifically how AI tools were
-used for codebase navigation and debugging, what they helped explain or trace, and where I
-verified or corrected their output.)*
+
+I used an AI coding assistant (Claude Code) throughout this project, primarily for
+**codebase navigation and debugging**, and disclose the specific uses below.
+
+- **Orientation / codebase map.** I had the assistant read the `services/` and `routes/`
+  files and summarize each module's responsibility and the route→service→model call chains
+  (e.g., how `POST /songs/<id>/rate` flows to `rate_song`). This is the backbone of my
+  codebase map. I verified the summaries by reading the files myself — for instance,
+  confirming in `models.py` that `playlist_entries` really does carry a `position` column, so
+  playlists are position-ordered rather than insertion-ordered.
+
+- **Reproduction before fixing.** Rather than firing HTTP requests, I used the assistant to
+  write small `flask`-context scripts that call the services directly with controlled inputs
+  (a Saturday→Sunday streak transition; `get_playlist_songs` on a 7-entry playlist; a friend
+  rating another user's shared song). Seeing the wrong output first (streak → 1, 6-of-7
+  songs, notification count unchanged) is what let me write real reproduction steps.
+
+- **Comparing two code paths (Issue #4).** For the notification bug I asked it to diff the two
+  sibling functions `add_to_playlist` and `rate_song`. That side-by-side made the missing
+  `create_notification` call in `rate_song` obvious — the bug was a *missing step*, not a
+  wrong line.
+
+- **Where the AI was wrong and I had to course-correct (Issue #3).** The most useful lesson.
+  The assistant's first hypothesis for the search "duplicate" bug was the obvious one — the
+  `outerjoin(song_tags)` fan-out — and it was ready to "fix" it with `.distinct()`. When I
+  reproduced first, the bug **did not appear**: `search('Crown')` returned 1 row and all three
+  `test_search_no_duplicates_*` tests passed. Digging in (raw SQL vs. ORM), we found the join
+  really does return 3 rows for a 3-tag song, but `db.session.query(Song)` de-duplicates
+  mapped entities by primary key, so the duplicates never reach the caller. I therefore did
+  **not** count #3 as a fixed bug, because it can't be reproduced in this environment. This is
+  a direct example of the AI proposing a plausible-but-unverified diagnosis and reproduction
+  overriding it.
+
+Throughout, I treated AI explanations as leads to verify by running code (pytest + shell
+probes), not as answers. The assistant also helped draft these write-ups, which I reviewed
+for accuracy against the actual code and test output.
 
 ---
 
