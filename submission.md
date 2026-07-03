@@ -35,8 +35,7 @@ I used an AI coding assistant (Claude Code) throughout this project, primarily f
   overriding it.
 
 Throughout, I treated AI explanations as leads to verify by running code (pytest + shell
-probes), not as answers. The assistant also helped draft these write-ups, which I reviewed
-for accuracy against the actual code and test output.
+probes), not as answers.
 
 ---
 
