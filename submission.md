@@ -1,5 +1,7 @@
 # Project 5 — Mixtape Bug Hunt — Submission
 
+**Commit history screenshot:** <https://drive.google.com/file/d/1fBMI9chron1aVnMuYg2DxInyKX9IxsYW/view?usp=sharing>
+
 ## AI Usage
 
 I used an AI coding assistant (Claude Code) throughout this project, primarily for
