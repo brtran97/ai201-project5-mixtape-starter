@@ -139,9 +139,28 @@ Bugs fixed (required 3): **#5 playlist**, **#1 streak**, **#4 notification**.
   a user who listened Saturday (streak 5) then listens Sunday. Expected streak 6 (consecutive
   day); got **1**. A control run Monday→Tuesday correctly gave 6, isolating the failure to
   Sunday. `test_streak_increments_on_sunday` fails (`1 != 2`).
-- **How I found the root cause:** *(filled during the fix)*
-- **The root cause:** *(filled during the fix)*
-- **Fix and side-effect check:** *(filled during the fix)*
+- **How I found the root cause:** Started at `POST /songs/<id>/listen`
+  (`routes/songs.py::listen`) → `streak_service.record_listening_event` →
+  `update_listening_streak`. I read the branch logic against the documented streak rules in
+  the docstring. Three branches: same day (no change), consecutive day (increment), otherwise
+  (reset). The consecutive-day branch had an extra clause — `and today.weekday() != 6` — that
+  the documented rules never mention. I confirmed with a quick check that `weekday()` returns
+  6 for Sunday, which matched the "only on Sundays" symptom exactly.
+- **The root cause:** The increment branch read
+  `elif days_since_last == 1 and today.weekday() != 6:`. In Python, `datetime.weekday()`
+  returns 0 for Monday through 6 for Sunday. So whenever the current listen falls on a Sunday,
+  `today.weekday() != 6` is `False`, the consecutive-day branch is skipped, and execution
+  falls into the `else`, which resets `listening_streak` to 1 — even though the user listened
+  the day before (a genuine consecutive day). The bug is dormant Monday–Saturday and only
+  manifests when the new listening day is a Sunday. Correct behavior requires that *any*
+  one-day gap increments the streak regardless of weekday; the weekday check has no basis in
+  the streak rules and was the entire cause.
+- **Fix and side-effect check:** Removed the spurious clause so the branch is simply
+  `elif days_since_last == 1:`. Side-effect check: I re-ran `tests/test_streaks.py` — all 5
+  pass. I specifically verified the *other* boundaries the streak logic depends on weren't
+  disturbed: new user starts at 1, same-day listening doesn't double-count
+  (`days_since_last == 0` branch, untouched), and a skipped day still resets
+  (`days_since_last >= 2` → `else`). Only the Sunday consecutive-day case changed behavior.
 
 ### Issue #4 — Notified when a friend adds my song to a playlist, but not when they rate it
 - **How I reproduced it:** In a shell, recorded nova's notification count (1), then had a
