@@ -167,6 +167,27 @@ Bugs fixed (required 3): **#5 playlist**, **#1 streak**, **#4 notification**.
   friend (darius) rate a song nova had shared via `rate_song(darius, nova_song, 5)`. nova's
   notification count stayed at **1** — no notification was created for the rating, even though
   the playlist-add path does create one.
-- **How I found the root cause:** *(filled during the fix)*
-- **The root cause:** *(filled during the fix)*
-- **Fix and side-effect check:** *(filled during the fix)*
+- **How I found the root cause:** The hint said this was architectural, not a typo, so instead
+  of hunting for a broken line I compared the two sibling functions in
+  `notification_service.py` that both represent "a friend interacted with your shared song":
+  `add_to_playlist` and `rate_song`. Reading them side by side, `add_to_playlist` ends with a
+  `create_notification(...)` call guarded by `if song.shared_by != added_by_user_id`, while
+  `rate_song` ends at `db.session.commit(); return rating`. I also grepped the codebase for a
+  `song_rated` notification type and found none — confirming the notification wasn't broken,
+  it was never written.
+- **The root cause:** `rate_song` persists the rating correctly but is **missing the
+  notification step entirely**. Its sibling `add_to_playlist` notifies the song's original
+  sharer; `rate_song` never calls `create_notification`, and no `song_rated` notification type
+  exists anywhere. So structurally, one of the two "interaction" paths simply omits the
+  behavior the feature requires — the sharer is notified on playlist-adds but never on
+  ratings. This is architectural: the fix isn't correcting a wrong value, it's adding a
+  missing step to bring `rate_song` in line with the established notification pattern.
+- **Fix and side-effect check:** After the existing `db.session.commit()`, I added a
+  `create_notification(user_id=song.shared_by, notification_type="song_rated", body=...)`
+  call, guarded by `if song.shared_by != user_id` so users aren't notified about rating their
+  own songs — mirroring `add_to_playlist`'s self-check. Side-effect checks: (1) a friend
+  rating a shared song now increments the sharer's notification count by exactly one, with the
+  right body/type; (2) a user rating their **own** song produces no notification (self-check
+  works); (3) `rate_song` still returns the `Rating` object the route serializes with
+  `to_dict()` — verified the return path and score are unchanged; (4) the full `pytest` suite
+  (13 tests) still passes.
